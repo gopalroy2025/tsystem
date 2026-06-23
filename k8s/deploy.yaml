@@ -1,0 +1,182 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bookstore
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bookstore-config
+  namespace: bookstore
+data:
+  POSTGRES_DB: "book"
+  POSTGRES_HOST: "bookstore-db"
+  POSTGRES_PORT: "5432"
+  POSTGRES_SCHEMA: "bookstore"
+  POSTGRES_USER: "postgres"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: bookstore-secret
+  namespace: bookstore
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: "bookstorepass"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: db-pvc
+  namespace: bookstore
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: db-init-sql
+  namespace: bookstore
+data:
+  initdb.sql: |
+    CREATE SCHEMA IF NOT EXISTS bookstore;
+    CREATE TABLE IF NOT EXISTS bookstore.book (
+        id serial primary key,
+        name text not null,
+        year int not null,
+        author text not null
+    );
+    INSERT INTO bookstore.book (name, author, year) VALUES
+        ('Terry Pratchett, Otec prasátek', 'Bill Kaye, Stephen Player', 2007),
+        ('TERRY PRATCHETT DISCWORLD NOVEL COLLECTION.', 'TERRY. PRATCHETT', 2012),
+        ('Terry Pratchett''s Discworld Coloring Book', 'Terry Pratchett', 2017),
+        ('Sourcery', 'Terry Pratchett', 2014),
+        ('Dodger', 'Terry Pratchett', 2019),
+        ('Seriously Funny', 'Terry Pratchett', 2016),
+        ('Nation', 'Terry Pratchett', 2009),
+        ('The Carpet People', 'Terry Pratchett', 2015),
+        ('Truckers', 'Terry Pratchett', 2015),
+        ('Sekáč', 'Terry Pratchett, Jan Kantůrek', 2011);
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bookstore-db
+  namespace: bookstore
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bookstore-db
+  template:
+    metadata:
+      labels:
+        app: bookstore-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - configMapRef:
+                name: bookstore-config
+            - secretRef:
+                name: bookstore-secret
+          volumeMounts:
+            - name: pgdata
+              mountPath: /var/lib/postgresql/data
+            - name: init-sql
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: pgdata
+          persistentVolumeClaim:
+            claimName: db-pvc
+        - name: init-sql
+          configMap:
+            name: db-init-sql
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bookstore-db
+  namespace: bookstore
+spec:
+  selector:
+    app: bookstore-db
+  ports:
+    - port: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bookstore-api
+  namespace: bookstore
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: bookstore-api
+  template:
+    metadata:
+      labels:
+        app: bookstore-api
+    spec:
+      containers:
+        - name: api
+          image: bookstore-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: bookstore-config
+            - secretRef:
+                name: bookstore-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bookstore-api
+  namespace: bookstore
+spec:
+  selector:
+    app: bookstore-api
+  ports:
+    - port: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adminer
+  namespace: bookstore
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: adminer
+  template:
+    metadata:
+      labels:
+        app: adminer
+    spec:
+      containers:
+        - name: adminer
+          image: adminer
+          ports:
+            - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: adminer
+  namespace: bookstore
+spec:
+  selector:
+    app: adminer
+  ports:
+    - port: 8080

@@ -1,0 +1,36 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: book
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: bookstorepass
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./initdb/initdb.sql:/docker-entrypoint-initdb.d/01-init.sql
+    ports:
+      - "5432:5432"
+
+  adminer:
+    image: adminer
+    ports:
+      - "8080:8080"
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      POSTGRES_DB: book
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: bookstorepass
+      POSTGRES_SCHEMA: bookstore
+    depends_on:
+      - db
+
+volumes:
+  pgdata:

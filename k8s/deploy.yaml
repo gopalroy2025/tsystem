@@ -128,8 +128,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: bookstore-api:latest
-          imagePullPolicy: IfNotPresent
+          image: gopalroy2025/bookstore-api:latest
           ports:
             - containerPort: 8000
           envFrom:
